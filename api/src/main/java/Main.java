@@ -15,27 +15,15 @@ public class Main {
   private static final String NAME = "my_status";
 
   public static void main(String[] args) {
-    try (CqlSession cqlSession = CqlSession.builder().build()) {
-      runCassandraMigration(cqlSession);
-    }
+    CqlSession cqlSession = CqlSession.builder().build();
+    runCassandraMigration(cqlSession);
     Javalin app =
         Javalin.create(config -> config.registerPlugin(new OpenApiPlugin(getOpenApiOptions())))
             .start(PORT);
-
-    app.get("users", Handlers::getAllUsers);
-    app.get("users/:username", Handlers::getUser);
-    app.get(":username/home", Handlers::home);
-    app.get(":username/status", Handlers::getAllStatuses);
-    app.post(":username/status", Handlers::createStatus);
-    app.get(":username/status/:status_id", Handlers::getStatus);
-    app.delete(":username/status/:status_id", Handlers::deleteStatus);
-    app.post(":username/follow/:followee_username", Handlers::follow);
-    app.delete(":username/follow/:followee_username", Handlers::unfollow);
-    app.get(":username/following", Handlers::following);
-    app.get(":username/followed_by", Handlers::followedBy);
+    Handlers handlers = new Handlers(cqlSession);
+    registerAppRoutes(app, handlers);
   }
 
-  // TODO: should I reuse the session? probably not. should I use a threadpool? maybe yes.
   private static void runCassandraMigration(CqlSession cqlSession) {
     Database database = new Database(cqlSession, new Keyspace(NAME));
     MigrationTask migration = new MigrationTask(database, new MigrationRepository());
@@ -47,5 +35,19 @@ public class Main {
     return new OpenApiOptions(applicationInfo)
         .path("/swagger-docs")
         .swagger(new SwaggerOptions("/swagger").title("My Swagger Documentation"));
+  }
+
+  private static void registerAppRoutes(Javalin app, Handlers handlers) {
+    app.get("users", handlers::getAllUsers);
+    app.get("users/:username", handlers::getUser);
+    app.get(":username/home", handlers::home);
+    app.get(":username/status", handlers::getAllStatuses);
+    app.post(":username/status", handlers::createStatus);
+    app.get(":username/status/:status_id", handlers::getStatus);
+    app.delete(":username/status/:status_id", handlers::deleteStatus);
+    app.post(":username/follow/:followee_username", handlers::follow);
+    app.delete(":username/follow/:followee_username", handlers::unfollow);
+    app.get(":username/following", handlers::following);
+    app.get(":username/followed_by", handlers::followedBy);
   }
 }
